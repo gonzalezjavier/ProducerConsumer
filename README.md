@@ -1,8 +1,8 @@
 # CSC 415 - Project 3 - Producer Consumer
 
-## Student Name : Name goes here
+## Student Name : Javier Gonzalez
 
-## Student ID : ID goes here
+## Student ID : 916582412
 
 ## Build Instructions
 

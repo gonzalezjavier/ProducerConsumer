@@ -1,1 +1,150 @@
-pseudo goes here
+create buffer array
+create consumer and producer comparison arrays
+create counters for index and size of arrays
+create a counter that is the produced items
+create in and out variable to help with circular array
+
+create binary semaphore to protect buffer
+create binary smepahore to protect from consumption before production
+create counting semaphore to keep track of when the buffer is full
+
+create variables for all arguments given
+create variable to check for overconsumption and for how much extra to add to a consumer thread
+
+struct thread_info{
+    thread_id
+    readable_id
+}
+
+
+int grab_item() {
+    item = buffer[out]
+    out = (out +1) % buffersize
+    return item
+}
+
+void put_item(int item) {
+    buffer[in] = item
+    in = (in + 1) % buffersize
+}
+
+
+void* producer(void* arg) {
+    cast the thread to a usable form
+    for(ammount of items each producer needs to create ) {
+        //make sure the buffer isnt full
+        wait(overproductionprotector)
+        wait(binarysem) //protects the main data such as buffer and counters
+        put_item(item)
+        add to producer array and icrement its index/size counter
+        printf(item produced by the specific thread)
+        global_counter ++
+        post(binarysem)
+        post(overproductionprotector)
+        sleep(pTime);
+    }
+}
+
+void* consumer(void* arg) {
+    cast thread to usable form
+
+    if(overconsume not needed){
+        for(ammount of items each consumer needs to consume) {
+            //wait for there to be items to consume
+            wait(consumptionProtectionSem)
+            //waits for the data protector to be available
+            sem_wait(binarySem);
+            int grabbedItem = grab_item()
+            add the grabbed item to conumser array and icrement its index/size counter
+            printf(item consumed and the thread associated with it)
+            //release sems
+            post(binarySem)
+            post(&overproductionProtectionSem) // this gives producer permission to produce
+            sleep(cTime)
+        }
+    } else {
+        set overconsume signal variable to zero
+
+        for(ammount of items each consumer needs to consume + overconsume ammount) {
+            //wait for there to be items to consume
+            wait(consumptionProtectionSem)
+            //waits for the data protector to be available
+            sem_wait(binarySem);
+            int grabbedItem = grab_item()
+            add the grabbed item to conumser array and icrement its index/size counter
+            printf(item consumed and the thread associated with it)
+            //release sems
+            post(binarySem)
+            post(&overproductionProtectionSem) // this gives producer permission to produce
+            sleep(cTime)
+        }
+
+    }
+
+}
+
+
+int main(int argc, char* argv[]) {
+    check if correct arguments were given and print format if not correct
+
+
+    create time variables to keep track of time
+
+    read all arguments by storing the argv 
+    
+    check if there is an overconsumption needed by thread
+
+    print timestamp and information regarding the values provided as arguments
+
+
+
+    spawn all threads and join all threads
+
+    struct thread_info producers[numOfProducers];
+    struct thread_info consumers[numOfConsumers];
+
+    for(int i=0; i < numOfProducers ; i++) {
+        producers[i].readable_id = i+1
+        pthread_create()
+    }
+
+    for(int i=0; i < numOfConsumers ; i++) {
+        consumers[i].readable_id = i+1
+        pthread_create()
+    }
+
+    //joins all producer threads
+    for(int i=0;i < numOfProducers;i++){
+        pthread_join();
+        printf(Producer Thread joined: )
+    }
+    //joins all consumer threads
+    for(int i=0;i < numOfConsumers;i++){
+        pthread_join();
+        printf(Consumer Thread joined: )
+    }
+    
+
+    //run test strategy for proof
+    int matcher = 0;
+    printf("Producer Array    |  Consumer Array\n");
+    for () //lopp through both consumer and producer arrays
+    {
+        if (producerArray[i] == consumerArray[i])
+        {
+            matcher +=1
+        }
+        
+        printf(producerArray[i] and consumerArray[i])
+    }
+    if(matcher == sizeOfProducerArray && matcher == sizeOfConsumerArray) {
+        printf("Producer and Consumer Arrays Match!")
+    }
+
+
+
+    //Print out timestamp
+
+
+
+}

@@ -9,11 +9,24 @@
 #include <time.h>
 #include <semaphore.h>
 
-
+//array to be added and removed from
 int* buffer;
+//for circular array
+int out = 0;
+int in = 0;
+//array used for comparing at end of program
 int* producerArray;
 int* consumerArray;
+
 int numOfBuffers,numOfProducers,numOfConsumers,eachProdItems,pTime,cTime;
+//items that will be added
+int itemCounter=1;
+//to keep track of index/size of checking arrays
+int prodIndex=0;
+int consIndex=0;
+
+//locking semaphores
+sem_t binarySem, consumptionProtectionSem, overproductionProtectionSem;
 
 
 struct thread_info{
@@ -32,7 +45,9 @@ struct thread_info{
  */
 int grab_item()
 {
-    
+    int item = buffer[out];
+    out = (out + 1) % numOfBuffers;
+    return item;
 }
 
 /* 
@@ -42,15 +57,50 @@ int grab_item()
  */
 void put_item(int item)
 {
-    
+    buffer[in] = item;
+    in = (in +1) % numOfBuffers;
 }
 
 void *producer(void* arg){
     //this will call the put_item
+    struct thread_info* producerThread = (struct thread_info*)arg;
+    for(int i=0; i < eachProdItems; i++){
+        //grab overproduction semaphore to make sure buffer is not full
+        sem_wait(&overproductionProtectionSem);
+        //grab the binary semaphore that protects main data 
+        sem_wait(&binarySem);
+        put_item(itemCounter);
+        producerArray[prodIndex++] = itemCounter;
+        printf("%d was produced by producer -> \t%d\n",itemCounter, producerThread->readable_id);
+        itemCounter++;
+        //release data protector semaphore
+        sem_post(&binarySem);
+        //allow consumers to start consumption of produced items
+        sem_post(&consumptionProtectionSem);
+        sleep(pTime);
+    }
+
+
 }
 
 void *consumer(void* arg){
     //this will call the get_item
+    struct thread_info* consumerThread = (struct thread_info*)arg;
+    for(int i = 0; i < (numOfProducers*eachProdItems)/numOfConsumers; i++){
+        //wait for there to be items to consume
+        sem_wait(&consumptionProtectionSem);
+        //waits for the data protector to be available
+        sem_wait(&binarySem);
+        int grabbedItem = grab_item();
+        consumerArray[consIndex++] = grabbedItem;
+        printf("%d was consumed by consumer -> \t%d\n", grabbedItem, consumerThread->readable_id);
+        //release data protector
+        sem_post(&binarySem);
+        //release a consumed buffer to be written to by producer
+        sem_post(&overproductionProtectionSem);
+        sleep(cTime);
+    }
+
 }
 
 int main(int argc, char* argv[]) 
@@ -94,7 +144,8 @@ int main(int argc, char* argv[])
         "\t                      Number of producers:  %d\n"
         "\t                      Number of consumers:  %d\n"
         "\tNumber of items produced by each producer:  %d\n"
-        "\tNumber of items consumed by each consumer:  %d\n",numOfBuffers,numOfProducers,numOfConsumers,eachProdItems,(numOfProducers*eachProdItems/numOfConsumers));
+        "\tNumber of items consumed by each consumer:  %d\n"
+        ,numOfBuffers,numOfProducers,numOfConsumers,eachProdItems,(numOfProducers*eachProdItems/numOfConsumers));
 
     //allocate memory
     buffer= malloc(numOfBuffers*sizeof(int));
@@ -109,6 +160,11 @@ int main(int argc, char* argv[])
      */
     struct thread_info producerThread[numOfProducers];
     struct thread_info consumerThread[numOfConsumers];
+    //initialize semaphores
+    sem_init(&binarySem, 0, 1);
+    sem_init(&consumptionProtectionSem, 0, 0); //set to 0 so that consumer cannot start consuming until producers have produced
+    sem_init(&overproductionProtectionSem, 0, numOfBuffers); //counting semaphore so that producer doesn't overproduce (overwrite)
+
     //spawns all producer threads and assigned readable ids
     for(int i=0;i<numOfProducers;i++){
         producerThread[i].readable_id=i+1;
@@ -117,12 +173,37 @@ int main(int argc, char* argv[])
     //spawns all consumer threads and assigns readable ids
     for(int i=0;i<numOfConsumers;i++){
         consumerThread[i].readable_id=i+1;
-        pthread_create(&consumerThread[i].tid,NULL,producer,(void*)&consumerThread[i]);
+        pthread_create(&consumerThread[i].tid,NULL,consumer,(void*)&consumerThread[i]);
     }
 
+    //joins all producer threads
+    for(int i=0;i<numOfProducers;i++){
+        pthread_join(producerThread[i].tid,NULL);
+        printf("Producer Thread joined:\t%d\n",producerThread[i].readable_id);
+    }
+    //joins all consumer threads
+    for(int i=0;i<numOfConsumers;i++){
+        pthread_join(consumerThread[i].tid,NULL);
+        printf("Consumer Thread joined:\t%d\n",consumerThread[i].readable_id);
+    }
 
     //run test strategy for proof
-
+    int matcher = 0;
+    printf("Producer Array    |  Consumer Array\n");
+    for (int i = 0; i < prodIndex; i++)
+    {
+        if (producerArray[i] == consumerArray[i])
+        {
+            matcher +=1;
+        }
+        
+        printf("%-18d|  %-15d\n",producerArray[i],consumerArray[i]);
+    }
+    if(matcher == prodIndex && matcher == consIndex) {
+        printf("Producer and Consumer Arrays Match!\n");
+    }
+    //Print out timestamp
+    
 
 
 
