@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
 
 
 
-    spawn all threads and join all threads
+    //spawn all threads and join all threads
 
     struct thread_info producers[numOfProducers];
     struct thread_info consumers[numOfConsumers];
@@ -126,9 +126,9 @@ int main(int argc, char* argv[]) {
     
 
     //run test strategy for proof
-    int matcher = 0;
+    int matcher = 0
     printf("Producer Array    |  Consumer Array\n");
-    for () //lopp through both consumer and producer arrays
+    for () //loop through both consumer and producer arrays
     {
         if (producerArray[i] == consumerArray[i])
         {
@@ -139,11 +139,13 @@ int main(int argc, char* argv[]) {
     }
     if(matcher == sizeOfProducerArray && matcher == sizeOfConsumerArray) {
         printf("Producer and Consumer Arrays Match!")
+    } else {
+        printf(they do not match)
     }
 
 
 
-    //Print out timestamp
+    Print out timestamp and elapsed time
 
 
 

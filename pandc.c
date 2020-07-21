@@ -18,7 +18,11 @@ int in = 0;
 int* producerArray;
 int* consumerArray;
 
-int numOfBuffers,numOfProducers,numOfConsumers,eachProdItems,pTime,cTime;
+//all args
+int numOfBuffers,numOfProducers,numOfConsumers,eachProdItems,pTime,cTime,eachConsumerItems;
+int overconsume = 0;
+int overconsumeAmount = 0;
+
 //items that will be added
 int itemCounter=1;
 //to keep track of index/size of checking arrays
@@ -28,17 +32,12 @@ int consIndex=0;
 //locking semaphores
 sem_t binarySem, consumptionProtectionSem, overproductionProtectionSem;
 
-
 struct thread_info{
     pthread_t tid;
     int readable_id;
 };
 
-/**
- * for the 2 functions below, look
- * at the process slides/video for 
- * sample code that can be used.
- */
+
 /* 
  * Function to remove item.
  * Item removed is returned
@@ -71,36 +70,53 @@ void *producer(void* arg){
         sem_wait(&binarySem);
         put_item(itemCounter);
         producerArray[prodIndex++] = itemCounter;
-        printf("%d was produced by producer -> \t%d\n",itemCounter, producerThread->readable_id);
+        printf("%8d was produced by producer ->%8d\n",itemCounter, producerThread->readable_id);
         itemCounter++;
         //release data protector semaphore
         sem_post(&binarySem);
         //allow consumers to start consumption of produced items
-        sem_post(&consumptionProtectionSem);
+         sem_post(&consumptionProtectionSem);
         sleep(pTime);
     }
-
-
 }
 
 void *consumer(void* arg){
     //this will call the get_item
     struct thread_info* consumerThread = (struct thread_info*)arg;
-    for(int i = 0; i < (numOfProducers*eachProdItems)/numOfConsumers; i++){
-        //wait for there to be items to consume
-        sem_wait(&consumptionProtectionSem);
-        //waits for the data protector to be available
-        sem_wait(&binarySem);
-        int grabbedItem = grab_item();
-        consumerArray[consIndex++] = grabbedItem;
-        printf("%d was consumed by consumer -> \t%d\n", grabbedItem, consumerThread->readable_id);
-        //release data protector
-        sem_post(&binarySem);
-        //release a consumed buffer to be written to by producer
-        sem_post(&overproductionProtectionSem);
-        sleep(cTime);
+    //overconsume not needed
+    if(!overconsume){
+        for(int i = 0; i < eachConsumerItems; i++){
+            //wait for there to be items to consume
+            sem_wait(&consumptionProtectionSem);
+            //waits for the data protector to be available
+            sem_wait(&binarySem);
+            int grabbedItem = grab_item();
+            consumerArray[consIndex++] = grabbedItem;
+            printf("%8d was consumed by consumer ->%8d\n", grabbedItem, consumerThread->readable_id);
+            //release data protector
+            sem_post(&binarySem);
+            //release a consumed buffer to be written to by producer
+            sem_post(&overproductionProtectionSem);
+            sleep(cTime);
+        }
+    } else {
+        //overconsumption needed
+        overconsume=0;
+        for(int i = 0; i < eachConsumerItems+overconsumeAmount; i++){
+            //wait for there to be items to consume
+            sem_wait(&consumptionProtectionSem);
+            //waits for the data protector to be available
+            sem_wait(&binarySem);
+            int grabbedItem = grab_item();
+            consumerArray[consIndex++] = grabbedItem;
+            printf("%8d was consumed by consumer ->%8d\n", grabbedItem, consumerThread->readable_id);
+            //release data protector
+            sem_post(&binarySem);
+            //release a consumed buffer to be written to by producer
+            sem_post(&overproductionProtectionSem);
+            sleep(cTime);
+        }
     }
-
 }
 
 int main(int argc, char* argv[]) 
@@ -122,36 +138,45 @@ int main(int argc, char* argv[])
     //create time variables to keep track of time
     struct timespec start_time;
     struct timespec end_time;
-
-
     time_t seconds;
     long nano_seconds;
 
-
     //read all args and store
-    
     numOfBuffers = atoi(argv[1]); 
     numOfProducers =  atoi(argv[2]);
     numOfConsumers =  atoi(argv[3]);
     eachProdItems =  atoi(argv[4]);
     pTime =  atoi(argv[5]);
     cTime =  atoi(argv[6]);
-    
-    //print timestamp and all args
+    eachConsumerItems = (numOfProducers*eachProdItems) / numOfConsumers;
 
-    printf(
-        "\t                        Number of buffers:  %d\n"
-        "\t                      Number of producers:  %d\n"
-        "\t                      Number of consumers:  %d\n"
-        "\tNumber of items produced by each producer:  %d\n"
-        "\tNumber of items consumed by each consumer:  %d\n"
-        ,numOfBuffers,numOfProducers,numOfConsumers,eachProdItems,(numOfProducers*eachProdItems/numOfConsumers));
+    //takes care of overconsumption for consumer threads
+    overconsume = (numOfProducers * eachProdItems) % numOfConsumers ? 1 : 0;
+    if(overconsume){
+        overconsumeAmount = (numOfProducers * eachProdItems) - (numOfConsumers * eachConsumerItems);
+    }
 
     //allocate memory
     buffer= malloc(numOfBuffers*sizeof(int));
     producerArray =  malloc((numOfProducers*eachProdItems)*sizeof(int));
     consumerArray =  malloc((numOfProducers*eachProdItems)*sizeof(int));
     
+    //print timestamp and all args
+    clock_gettime(0, &start_time);
+    printf("Current Time: %s\n\n",ctime(&start_time.tv_sec));
+
+    printf(
+        "                        Number of buffers:  %d\n"
+        "                      Number of producers:  %d\n"
+        "                      Number of consumers:  %d\n"
+        "Number of items produced by each producer:  %d\n"
+        "Number of items consumed by each consumer:  %d\n"
+        "                         Over consume on?:  %d\n"
+        "                     Over consume ammount:  %d\n"
+        "      Time each Producer sleeps (seconds):  %d\n"
+        "      Time each Consumer sleeps (seconds):  %d\n\n"
+        ,numOfBuffers,numOfProducers,numOfConsumers,eachProdItems,eachConsumerItems,overconsume,overconsumeAmount,pTime,cTime);
+
 
     /**
      * we spawn all threads
@@ -186,6 +211,10 @@ int main(int argc, char* argv[])
         pthread_join(consumerThread[i].tid,NULL);
         printf("Consumer Thread joined:\t%d\n",consumerThread[i].readable_id);
     }
+    
+    //Print out timestamp
+    clock_gettime(0, &end_time);
+    printf("\nCurrent Time: %s\n",ctime(&end_time.tv_sec));
 
     //run test strategy for proof
     int matcher = 0;
@@ -201,10 +230,21 @@ int main(int argc, char* argv[])
     }
     if(matcher == prodIndex && matcher == consIndex) {
         printf("Producer and Consumer Arrays Match!\n");
+    } else {
+        printf("Producer and Consumer Arrays do NOT Match!\n");
     }
-    //Print out timestamp
     
+    //print elapsed time
+    seconds = end_time.tv_sec - start_time.tv_sec;
+    nano_seconds = end_time.tv_nsec - start_time.tv_nsec;
 
-
+    if (end_time.tv_nsec < start_time.tv_nsec)
+    {
+        seconds--;
+        nano_seconds+=1000000000L;
+    }
+    printf("\nTotal runtime: %ld.%09ld seconds\n",seconds, nano_seconds);
+    
+    return 0;
 
 }
